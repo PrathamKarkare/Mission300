@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mission 300 Global</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+        
+        :root {
+            --bg-main: #1a1c2c; --bg-card: #25283d; --bg-input: #2f334d;
+            --border-glow: #4a4e69; --text-main: #e2e8f0; --text-muted: #94a3b8;
+            --accent: #b79ced; --accent-bright: #d4c1ec; --danger: #ff8b94;
+            --success: #8ef3c2;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif; background-color: var(--bg-main);
+            color: var(--text-main); margin: 0; padding: 40px 20px; line-height: 1.6;
+        }
+
+        /* Status Indicator Styling */
+        .status-container {
+            display: flex; align-items: center; justify-content: center;
+            gap: 8px; margin-bottom: 10px;
+        }
+        #status-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background-color: #64748b; box-shadow: 0 0 5px #64748b; transition: 0.3s;
+        }
+        #status-label { font-size: 0.7rem; letter-spacing: 1px; color: var(--text-muted); font-weight: 600; }
+        .status-online { background-color: var(--success) !important; box-shadow: 0 0 10px var(--success) !important; }
+        .status-offline { background-color: var(--danger) !important; box-shadow: 0 0 10px var(--danger) !important; }
+
+        .container { max-width: 950px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 50px; }
+        h1 { font-weight: 300; letter-spacing: 2px; text-transform: uppercase; font-size: 1.8rem; margin: 0; }
+        
+        .progress-wrapper {
+            background: rgba(0,0,0,0.2); height: 10px; border-radius: 20px;
+            margin: 20px auto; width: 100%; max-width: 600px; border: 1px solid var(--border-glow); overflow: hidden;
+        }
+        #progress-bar { background: linear-gradient(90deg, var(--accent), var(--accent-bright)); height: 100%; width: 0%; transition: width 1s ease; }
+        
+        .nav-buttons { display: flex; justify-content: center; gap: 20px; margin-bottom: 40px; }
+        .btn-nav { background: var(--bg-card); border: 2px solid var(--border-glow); color: var(--text-muted); padding: 12px 30px; border-radius: 12px; cursor: pointer; font-weight: 600; }
+        .btn-nav.active { border-color: var(--accent); color: var(--accent); }
+        
+        .view-section { background: var(--bg-card); padding: 40px; border-radius: 24px; border: 1px solid var(--border-glow); box-shadow: 0 15px 35px rgba(0,0,0,0.3); display: none; }
+        .view-section.active { display: block; }
+        
+        .form-group { margin-bottom: 25px; }
+        label { display: block; font-size: 0.75rem; color: var(--accent); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1.5px; }
+        input, select, textarea { width: 100%; padding: 15px; background: var(--bg-input); border: 1px solid var(--border-glow); color: var(--text-main); border-radius: 12px; font-family: inherit; }
+        
+        .btn-submit { background: var(--accent); color: var(--bg-main); border: none; width: 100%; padding: 18px; border-radius: 12px; font-weight: 800; cursor: pointer; text-transform: uppercase; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
+        .stat-card { background: rgba(255,255,255,0.03); padding: 25px; border-radius: 18px; border: 1px solid var(--border-glow); text-align: center; }
+        
+        .charts-container { display: grid; grid-template-columns: 1.5fr 1fr; gap: 25px; margin-bottom: 40px; }
+        .chart-box { background: rgba(0,0,0,0.1); padding: 20px; border-radius: 18px; border: 1px solid var(--border-glow); }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; font-size: 0.7rem; color: var(--accent); padding: 15px; border-bottom: 1px solid var(--border-glow); }
+        td { padding: 18px 15px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.9rem; }
+        .tag-work { border: 1px solid var(--accent); color: var(--accent); padding: 4px 8px; border-radius: 4px; }
+        .tag-rest { border: 1px solid var(--text-muted); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="status-container">
+            <div id="status-dot"></div>
+            <span id="status-label">INITIALIZING...</span>
+        </div>
+        <h1>Mission 300 <span style="font-weight: 100;">// Global</span></h1>
+        <div class="progress-wrapper"><div id="progress-bar"></div></div>
+        <p id="progress-text" style="text-align:center; font-size: 0.85rem; color: var(--accent);">WAITING FOR DATA...</p>
+    </header>
+
+    <div class="nav-buttons">
+        <button class="btn-nav active" onclick="showView('form-view', this)">Log Workout</button>
+        <button class="btn-nav" onclick="showView('stats-view', this)">Analytics</button>
+    </div>
+
+    <section id="form-view" class="view-section active">
+        <form id="workoutForm">
+            <div class="form-group"><label>Date</label><input type="date" id="date" required></div>
+            <div class="form-group"><label>Duration (Mins)</label><input type="number" id="duration" placeholder="e.g. 45"></div>
+            <div class="form-group">
+                <label>Category</label>
+                <select id="category">
+                    <option value="Strength">Strength</option>
+                    <option value="Cardio">Cardio</option>
+                    <option value="Sports">Sports</option>
+                    <option value="Yoga">Yoga</option>
+                </select>
+            </div>
+            <button type="submit" class="btn-submit">Sync to Cloud</button>
+        </form>
+    </section>
+
+    <section id="stats-view" class="view-section">
+        <div class="stats-grid">
+            <div class="stat-card"><h3>Days</h3><p id="stat-unique-days">0</p></div>
+            <div class="stat-card"><h3>Minutes</h3><p id="stat-mins">0</p></div>
+            <div class="stat-card"><h3>Month</h3><p id="stat-month">0</p></div>
+        </div>
+        <div class="charts-container">
+            <div class="chart-box"><canvas id="barChart"></canvas></div>
+            <div class="chart-box"><canvas id="pieChart"></canvas></div>
+        </div>
+        <table id="history-table">
+            <thead><tr><th>Date</th><th>Type</th><th>Mins</th><th></th></tr></thead>
+            <tbody id="history-body"></tbody>
+        </table>
+    </section>
+</div>
+
+<script>
+    // --- YOUR KEY INTEGRATED ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyBvmlKaFA2WL_BGbSb9m4RKuYElqHrJwbA",
+        authDomain: "mission-300-38a4e.firebaseapp.com",
+        projectId: "mission-300-38a4e",
+        storageBucket: "mission-300-38a4e.firebasestorage.app",
+        messagingSenderId: "693480568946",
+        appId: "1:693480568946:web:a231010aaa76071c542aeb",
+        measurementId: "G-9JR8MQR73S"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let entries = [];
+    let charts = { bar: null, pie: null };
+    document.getElementById('date').valueAsDate = new Date();
+
+    // --- REAL-TIME SYNC & STATUS LOGIC ---
+    db.collection("workouts").orderBy("date", "desc").onSnapshot((snapshot) => {
+        entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Update Status to GREEN
+        document.getElementById('status-dot').className = 'status-online';
+        document.getElementById('status-label').innerText = 'CLOUD SYNC ACTIVE';
+        
+        renderStats();
+        updateProgress();
+    }, (error) => {
+        console.error("Cloud Error:", error);
+        // Update Status to RED
+        document.getElementById('status-dot').className = 'status-offline';
+        document.getElementById('status-label').innerText = 'OFFLINE: CHECK RULES';
+    });
+
+    // --- PUSH DATA TO CLOUD ---
+    document.getElementById('workoutForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const entry = {
+            date: document.getElementById('date').value,
+            duration: parseInt(document.getElementById('duration').value) || 0,
+            category: document.getElementById('category').value,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        try {
+            await db.collection("workouts").add(entry);
+            e.target.reset();
+            document.getElementById('date').valueAsDate = new Date();
+            showView('stats-view', document.querySelectorAll('.btn-nav')[1]);
+        } catch (err) {
+            alert("Error: Check your Firestore rules!");
+        }
+    });
+
+    async function deleteEntry(id) {
+        if(confirm("Delete permanently?")) {
+            await db.collection("workouts").doc(id).delete();
+        }
+    }
+
+    function renderStats() {
+        const tbody = document.getElementById('history-body');
+        tbody.innerHTML = '';
+        entries.forEach(e => {
+            tbody.innerHTML += `<tr><td>${e.date}</td><td><span class="tag-work">${e.category}</span></td><td>${e.duration}</td><td><button onclick="deleteEntry('${e.id}')" style="color:var(--danger); background:none; border:none; cursor:pointer">Del</button></td></tr>`;
+        });
+        const uniqueDays = new Set(entries.map(e => e.date)).size;
+        document.getElementById('stat-unique-days').innerText = uniqueDays;
+        document.getElementById('stat-mins').innerText = entries.reduce((s, e) => s + e.duration, 0);
+        renderCharts(entries);
+    }
+
+    function updateProgress() {
+        const uniqueDays = new Set(entries.map(e => e.date)).size;
+        const pct = Math.min((uniqueDays / 300) * 100, 100);
+        document.getElementById('progress-bar').style.width = pct + '%';
+        document.getElementById('progress-text').innerText = `${uniqueDays} / 300 DAYS COMPLETED`;
+    }
+
+    function renderCharts(data) {
+        const ctxPie = document.getElementById('pieChart').getContext('2d');
+        const catMap = {};
+        data.forEach(e => catMap[e.category] = (catMap[e.category] || 0) + 1);
+
+        if(charts.pie) charts.pie.destroy();
+        charts.pie = new Chart(ctxPie, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(catMap),
+                datasets: [{ data: Object.values(catMap), backgroundColor: ['#b79ced', '#8ef3c2', '#94a3b8', '#ff8b94'], borderWidth: 0 }]
+            },
+            options: { cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } } }
+        });
+    }
+
+    function showView(viewId, btn) {
+        document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.btn-nav').forEach(b => b.classList.remove('active'));
+        document.getElementById(viewId).classList.add('active');
+        btn.classList.add('active');
+    }
+</script>
+</body>
+</html>
