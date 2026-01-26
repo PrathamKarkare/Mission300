@@ -31,7 +31,6 @@
         }
 
         .container { max-width: 850px; margin: 0 auto; }
-
         header { text-align: center; padding: 30px 0; }
         h1 { font-weight: 800; font-size: 2rem; letter-spacing: -1px; margin-bottom: 5px; }
         
@@ -89,6 +88,7 @@
 
         .hidden { display: none; }
 
+        .chart-row { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; margin-bottom: 25px; }
         table { width: 100%; border-collapse: collapse; }
         th { text-align: left; font-size: 0.7rem; color: var(--text-dim); padding: 10px; border-bottom: 1px solid var(--border); }
         td { padding: 12px 10px; font-size: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.02); }
@@ -98,14 +98,13 @@
         .tag-rest { background: rgba(142, 243, 194, 0.1); color: var(--accent-mint); }
 
         @keyframes slideUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 700px) { .chart-row { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <header>
-        <h1>Mission 300</h1>
-    </header>
+    <header><h1>Mission 300</h1></header>
 
     <div class="hero-card">
         <div class="progress-label-row"><span>Goal Progress</span><span id="progress-pct">0%</span></div>
@@ -129,7 +128,7 @@
                 
                 <div class="rest-pill">
                     <input type="checkbox" id="isRest" onchange="toggleRestUI(this.checked)">
-                    <label style="margin:0; color:var(--text-main);">Today is a rest/recovery day</label>
+                    <label style="margin:0; color:var(--text-main); cursor:pointer;">Today is a rest/recovery day</label>
                 </div>
 
                 <div id="workout-ui">
@@ -152,7 +151,6 @@
                             <option value="Swimming">Swimming</option>
                         </select>
                     </div>
-
                     <div class="form-group"><label>Duration (Minutes)</label><input type="number" id="duration"></div>
                 </div>
                 <button type="submit" class="submit-btn">Execute Sync</button>
@@ -161,6 +159,10 @@
     </section>
 
     <section id="stats" class="content-section">
+        <div class="chart-row">
+            <div class="glass-panel"><canvas id="barChart"></canvas></div>
+            <div class="glass-panel"><canvas id="pieChart"></canvas></div>
+        </div>
         <div class="glass-panel">
             <table>
                 <thead><tr><th>Date</th><th>Module</th><th>Mins</th><th></th></tr></thead>
@@ -185,6 +187,7 @@
     const db = firebase.firestore();
 
     let logs = [];
+    let charts = { bar: null, pie: null };
     document.getElementById('date').valueAsDate = new Date();
 
     db.collection("workouts").orderBy("date", "desc").onSnapshot((snapshot) => {
@@ -238,8 +241,8 @@
             </tr>`;
         });
 
-        // FIXED LOGIC: Only count unique dates where isRestDay is FALSE
-        const activeWorkoutDates = new Set(logs.filter(l => l.isRestDay === false).map(l => l.date));
+        // FIXED LOGIC: Handle legacy data that doesn't have isRestDay field
+        const activeWorkoutDates = new Set(logs.filter(l => !l.isRestDay).map(l => l.date));
         const workoutCount = activeWorkoutDates.size;
         
         const pct = ((workoutCount / 300) * 100).toFixed(1);
@@ -248,6 +251,45 @@
         document.getElementById('val-total').innerText = logs.length;
         document.getElementById('progress-pct').innerText = pct + "%";
         document.getElementById('progress-bar').style.width = pct + "%";
+        
+        updateCharts();
+    }
+
+    function updateCharts() {
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = 'Plus Jakarta Sans';
+
+        // PIE: Grouping categories
+        const catMap = {};
+        logs.forEach(l => {
+            const cat = l.category.split(':')[0]; // Groups all "Sports: Padel" into just "Sports"
+            catMap[cat] = (catMap[cat] || 0) + 1;
+        });
+
+        if(charts.pie) charts.pie.destroy();
+        charts.pie = new Chart(document.getElementById('pieChart'), {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(catMap),
+                datasets: [{ data: Object.values(catMap), backgroundColor: ['#b79ced', '#8ef3c2', '#475569', '#1e293b'], borderWidth: 0 }]
+            },
+            options: { cutout: '80%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15 } } } }
+        });
+
+        // BAR: Last 7 active sessions
+        const timeline = {};
+        const sorted = [...logs].filter(l => !l.isRestDay).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(-7);
+        sorted.forEach(l => timeline[l.date] = (timeline[l.date] || 0) + l.duration);
+
+        if(charts.bar) charts.bar.destroy();
+        charts.bar = new Chart(document.getElementById('barChart'), {
+            type: 'bar',
+            data: {
+                labels: Object.keys(timeline),
+                datasets: [{ label: 'Minutes', data: Object.values(timeline), backgroundColor: '#b79ced', borderRadius: 8 }]
+            },
+            options: { scales: { y: { display: false }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } }
+        });
     }
 
     function showTab(id, btn) {
